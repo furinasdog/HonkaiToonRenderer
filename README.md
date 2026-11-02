@@ -10,8 +10,10 @@ The plugin compiles in an independent UE 5.8.4 Editor and Development host witho
 an importer or tracker. Its eight included generic assets pass actual material-graph
 and package-dependency checks under NullRHI. Production integration, cooked Shipping
 and GPU image equivalence are still unverified; this is not a finished release.
-All five plugin automation groups pass in that independent Editor host under
-NullRHI with zero test warnings or failures. These checks do not validate pixels.
+All seven automation groups (five material/lifecycle and two upscaling groups) pass
+in that independent Editor host under NullRHI, both with and without the optional
+official NVIDIA SDK, with zero test warnings or failures. Editor and Development
+builds pass in both configurations. These checks do not validate pixels or GPU DLSS.
 
 ## Installation
 
@@ -118,7 +120,7 @@ seven parent materials plus `T_LinearWhite` at `/HonkaiToonRenderer/Materials`.
 embedded shader code and package dependencies. Importing the build module alone does
 not mutate assets. Python is an authoring dependency and is not used at runtime.
 
-Run `Automation RunTests HonkaiToonRenderer` in Editor and non-Editor Development.
+Run `Automation RunTests HonkaiToon` in Editor and non-Editor Development.
 Then perform a real GPU/cooked Shipping smoke in each host; source and NullRHI checks
 alone do not verify pixel output. Verify all eight plugin packages are in the cooked
 registry and none depends on the original host's `/Game` packages.
