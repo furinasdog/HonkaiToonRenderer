@@ -10,6 +10,8 @@ The plugin compiles in an independent UE 5.8.4 Editor and Development host witho
 an importer or tracker. Its eight included generic assets pass actual material-graph
 and package-dependency checks under NullRHI. Production integration, cooked Shipping
 and GPU image equivalence are still unverified; this is not a finished release.
+All five plugin automation groups pass in that independent Editor host under
+NullRHI with zero test warnings or failures. These checks do not validate pixels.
 
 ## Installation
 

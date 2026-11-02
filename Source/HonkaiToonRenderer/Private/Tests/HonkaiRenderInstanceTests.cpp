@@ -1,6 +1,7 @@
 #include "HonkaiRenderInstance.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Animation/Skeleton.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -10,6 +11,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/App.h"
+#include "ReferenceSkeleton.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/StrongObjectPtr.h"
 #include <limits>
@@ -47,6 +49,12 @@ namespace
 
         FRendererFixture(int32 Slots = 1)
         {
+            auto* Skeleton = NewObject<USkeleton>();
+            {
+                FReferenceSkeletonModifier Modifier(Skeleton);
+                Modifier.Add(FMeshBoneInfo(TEXT("root"), TEXT("root"), INDEX_NONE), FTransform::Identity);
+            }
+            Asset->SetSkeleton(Skeleton); Asset->SetRefSkeleton(Skeleton->GetReferenceSkeleton());
             for (int32 I = 0; I < Slots; ++I) Asset->GetMaterials().Add(FSkeletalMaterial(nullptr));
             Surface->SetSkeletalMesh(Asset.Get()); Outline->SetSkeletalMesh(Asset.Get());
             Inputs.SetNum(Slots);
