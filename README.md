@@ -6,8 +6,10 @@ face threshold maps and the toon postprocess. The host supplies ordinary UE mesh
 camera and texture objects. No PMX, VRM4U, tracking, Slate or external process dependency
 is required.
 
-This draft is not yet a compiled or GPU-verified release. Material assets must be
-generated at the plugin mount before the build and cook checks below can pass.
+The plugin compiles in an independent UE 5.8.4 Editor and Development host without
+an importer or tracker. Its eight included generic assets pass actual material-graph
+and package-dependency checks under NullRHI. Production integration, cooked Shipping
+and GPU image equivalence are still unverified; this is not a finished release.
 
 ## Installation
 

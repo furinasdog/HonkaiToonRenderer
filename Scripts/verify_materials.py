@@ -62,9 +62,16 @@ assert white and not white.get_editor_property("srgb")
 options = u.AssetRegistryDependencyOptions(include_hard_package_references=True, include_soft_package_references=True,
     include_searchable_names=False, include_soft_management_references=False, include_hard_management_references=False)
 registry = u.AssetRegistryHelpers.get_asset_registry()
+registry.scan_paths_synchronous([root], force_rescan=True)
 for name in (*model_names, "M_CelLighting", "T_LinearWhite"):
     package = root + "/" + name
-    for dependency in registry.get_dependencies(package, options):
+    assets = registry.get_assets_by_package_name(package, include_only_on_disk_assets=True)
+    assert assets and any(asset.is_valid() and str(asset.asset_name) == name for asset in assets), package
+    dependencies = registry.get_dependencies(package, options) or []
+    if name in ("M_Toon", "M_ToonTwoSided", "M_FaceOutline"):
+        assert root + "/T_LinearWhite" in (str(item) for item in dependencies), (package, dependencies)
+    for dependency in dependencies:
         path = str(dependency)
         assert path.startswith(("/HonkaiToonRenderer/", "/Engine/", "/Script/")), (package, path)
+    u.log("HONKAI_TOON_DEPENDENCIES " + name + " " + repr([str(item) for item in dependencies]))
 u.log("HONKAI_TOON_VERIFIED count=8 host_dependencies=0")
