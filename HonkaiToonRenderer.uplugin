@@ -8,6 +8,20 @@
   "CreatedBy": "furinasdog",
   "CanContainContent": true,
   "Modules": [
-    { "Name": "HonkaiToonRenderer", "Type": "Runtime", "LoadingPhase": "Default" }
+    {
+      "Name": "HonkaiToonRenderer",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "DLSS",
+      "Enabled": true,
+      "Optional": true,
+      "PlatformAllowList": [
+        "Win64"
+      ]
+    }
   ]
 }

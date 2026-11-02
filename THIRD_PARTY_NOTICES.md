@@ -20,3 +20,13 @@ Rendering references supplied for the original project:
 - https://zhuanlan.zhihu.com/p/699682089
 
 These are reading references. Their articles and images are not redistributed here.
+
+## Optional NVIDIA DLSS integration
+
+The original `FHonkaiUpscaling` API and adapter code are MIT. The separately obtained
+NVIDIA DLSS SDK, official Unreal plugins, NGX libraries and DLLs retain their NVIDIA
+copyrights and NVIDIA RTX SDK license terms. They are not included in this repository
+and are not licensed under MIT by this project. Calling their public APIs does not
+relicense the SDK. If a host distributes the optional production runtime binaries,
+it must comply with their application distribution, attribution and commercial
+release notification requirements and ship the applicable NVIDIA notices.

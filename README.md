@@ -134,3 +134,59 @@ setups have not been validated. Model importing, physics, face-map authoring, UI
 tracking and output streaming remain host responsibilities.
 
 Original code is MIT. See THIRD_PARTY_NOTICES.md for Unreal Engine content terms.
+
+## Optional NVIDIA upscaling
+
+`FHonkaiUpscaling` is independent of the material binding instance. A host keeps one
+owner for the application's global upscaling state and calls it on the game thread:
+
+```cpp
+#include "HonkaiUpscaling.h"
+FHonkaiUpscaling Upscaling;
+FString Error;
+Upscaling.SetMode(EHonkaiUpscalingMode::DLAA, ViewportSizeInPixels, Error);
+// Or DLSSQuality. TSR restores the values saved before the first successful enable.
+Upscaling.SetMode(EHonkaiUpscalingMode::TSR, ViewportSizeInPixels, Error);
+// EndPlay, before destroying the viewport:
+Upscaling.Restore();
+```
+
+The default is TSR/disabled. Without the optional NVIDIA SDK, the plugin still
+builds and NVIDIA modes return an unsupported reason without changing AA or
+resolution. The SDK is detected only under the selected host project's
+`Plugins/NVIDIA/DLSS` and `Plugins/NVIDIA/StreamlineNGXCommon` directories. Public
+headers contain no NVIDIA types or includes. Host UI stays outside this plugin.
+
+The tested integration target is NVIDIA's official UE5.8 DLSS4.5 plugin 8.9.0 with
+NGX310.9.16. DLAA uses 100% resolution; DLSS Quality queries the official optimal
+ratio. Both request preset M rather than the package's default K. These are requests,
+not proof that a GPU feature executed: inspect the actual NVIDIA runtime log and
+rendered output in the host. Current tests do not establish GPU image quality.
+
+On successful enable the owner uses UE5.8 temporary CVar overrides for AA method,
+screen percentage, temporal upscaler/upsampling, dynamic-resolution mode, preset and
+DLSS enable. Removing that temporary layer restores the underlying values and
+priorities, including constructor defaults, and retains later console overrides.
+Changing the host's render scale while NVIDIA mode is active must first restore it.
+Calls must follow PostEngineInit. Frame generation and ray reconstruction are not
+enabled. Independent scene captures, including a host's Spout capture, do not
+automatically use the main viewport's DLSS. Slate UI remains at output resolution.
+
+The NVIDIA SDK is separately licensed and excluded from this MIT source repository.
+Use the fixed official package and retain its notices. For redistribution, include
+the applicable NVIDIA license documents and application attribution. Commercial
+release notification requirements remain the application publisher's responsibility.
+No SDK sources or binaries are included here.
+
+After reviewing NVIDIA's license, prepare the fixed official package with:
+
+```powershell
+./Scripts/Prepare-NvidiaDlss.ps1 -ProjectRoot C:/Projects/YourHost -ArchivePath C:/Downloads/2026.10.16_UE5.8_DLSS4.5Plugin_v8.9.0.zip
+```
+
+Alternatively use `-Download` to obtain the package directly from NVIDIA. The host
+root must contain exactly one `.uproject`; existing SDK modifications are preserved
+and cause a clear refusal. Add `/Plugins/NVIDIA/` to the **host** `.gitignore` before
+installing. The script verifies the fixed archive hash and NVIDIA production DLL
+signatures, excludes vendor precompiled editor binaries and development DLLs, and
+records source provenance. It never places the SDK in this plugin's Git repository.
