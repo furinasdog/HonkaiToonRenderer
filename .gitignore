@@ -1,0 +1,14 @@
+/Binaries/
+/Intermediate/
+/Saved/
+/DerivedDataCache/
+*.sln
+*.suo
+__pycache__/
+/ThirdParty/SDK/
+/ThirdParty/DLSS/
+/ThirdParty/Streamline/
+*.dll
+*.lib
+*.pdb
+*.exp
