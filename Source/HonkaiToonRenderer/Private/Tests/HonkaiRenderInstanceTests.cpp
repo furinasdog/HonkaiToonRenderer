@@ -12,6 +12,7 @@
 #include "Misc/App.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/StrongObjectPtr.h"
+#include <limits>
 
 namespace
 {
@@ -176,6 +177,8 @@ bool FHonkaiRenderAtomicTest::RunTest(const FString&)
     TestTrue(TEXT("Failed bind retains old live subject"), Fixture.Renderer->IsBound() && Fixture.Material() == Material);
     TestEqual(TEXT("Failed bind retains own postprocess"), Fixture.Camera->PostProcessSettings.WeightedBlendables.Array.Num(), Blendables);
     TestFalse(TEXT("Invalid preview slot is rejected"), Fixture.Renderer->SetTint(5, FLinearColor::White));
+    TestFalse(TEXT("Nonfinite preview color is rejected"), Fixture.Renderer->SetTint(0,
+        FLinearColor(std::numeric_limits<float>::quiet_NaN(), 1.f, 1.f, 1.f)));
     for (int32 Case = 0; Case < 4; ++Case)
     {
         auto Invalid = Fixture.Inputs;

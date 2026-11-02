@@ -141,6 +141,11 @@ namespace
         UTexture* BoundMap = nullptr;
         return Map && Material && Material->GetTextureParameterValue(TEXT("FaceMap"), BoundMap) && BoundMap == Map;
     }
+
+    bool IsFiniteColor(FLinearColor Color)
+    {
+        return FMath::IsFinite(Color.R) && FMath::IsFinite(Color.G) && FMath::IsFinite(Color.B) && FMath::IsFinite(Color.A);
+    }
 }
 
 bool UHonkaiRenderInstance::ValidateFaceMaps(const FHonkaiFaceMaps& Maps, FString& Error) const
@@ -193,7 +198,7 @@ bool UHonkaiRenderInstance::Prepare(const FHonkaiRenderTargets& Targets, const T
     }
     for (const auto& Input : Surfaces)
     {
-        if (Input.Tint.ContainsNaN() || Input.OutlineColor.ContainsNaN() || !FMath::IsFinite(Input.ToonStrength)
+        if (!IsFiniteColor(Input.Tint) || !IsFiniteColor(Input.OutlineColor) || !FMath::IsFinite(Input.ToonStrength)
             || !FMath::IsFinite(Input.SphereMode) || !FMath::IsFinite(Input.OutlineWidth) || Input.OutlineWidth < 0.f
             || !FMath::IsFinite(Input.OutlineOpacity) || Input.OutlineOpacity < 0.f || Input.OutlineOpacity > 1.f
             || Input.Tint.A < 0.f || Input.Tint.A > 1.f
@@ -353,7 +358,7 @@ void UHonkaiRenderInstance::SetLighting(FVector WorldDirection, FVector FaceWorl
 
 bool UHonkaiRenderInstance::SetTint(int32 Slot, FLinearColor Tint)
 {
-    if (!IsInGameThread() || !Materials.IsValidIndex(Slot) || Tint.ContainsNaN() || Tint.A < 0.f || Tint.A > 1.f) return false;
+    if (!IsInGameThread() || !Materials.IsValidIndex(Slot) || !IsFiniteColor(Tint) || Tint.A < 0.f || Tint.A > 1.f) return false;
     Materials[Slot]->SetVectorParameterValue(TEXT("Tint"), Tint);
     Materials[Slot]->SetScalarParameterValue(TEXT("Opacity"), Tint.A);
     return true;
