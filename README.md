@@ -6,14 +6,16 @@ face threshold maps and the toon postprocess. The host supplies ordinary UE mesh
 camera and texture objects. No PMX, VRM4U, tracking, Slate or external process dependency
 is required.
 
-The plugin compiles in an independent UE 5.8.4 Editor and Development host without
-an importer or tracker. Its eight included generic assets pass actual material-graph
-and package-dependency checks under NullRHI. Production integration, cooked Shipping
-and GPU image equivalence are still unverified; this is not a finished release.
-All seven automation groups (five material/lifecycle and two upscaling groups) pass
-in that independent Editor host under NullRHI, both with and without the optional
-official NVIDIA SDK, with zero test warnings or failures. Editor and Development
-builds pass in both configurations. These checks do not validate pixels or GPU DLSS.
+The plugin builds in an independent UE 5.8.4 Editor and Development host without
+an importer or tracker. Its eight generic assets pass actual graph and dependency
+checks. All seven plugin automation groups pass under NullRHI with and without the
+optional official NVIDIA SDK. Both production hosts pass their complete Editor
+suites; a cooked Win64 Development host passes 15 runtime checks. Actual DX12
+before/after extraction captures were visually compared, with differences near a
+repeat-run control. These checks do not establish exact matching to a game's art.
+
+Shipping packaging and actual GPU DLSS remain unverified at this checkpoint.
+Character models, reference screenshots and private test recordings are excluded.
 
 ## Installation
 

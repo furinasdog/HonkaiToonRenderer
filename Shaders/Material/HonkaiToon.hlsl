@@ -35,7 +35,9 @@ float3 lighting = lerp(shadowColor, lightColor, band);
 float warmPaint = 1 - smoothstep(-0.005, 0.015, base.b - base.r);
 // Keep cool paint cool, while warm/pink paint gets a redder shadow instead of a blue-grey wash.
 float coolRamp = smoothstep(0.02, 0.08, shadowColor.b - shadowColor.r);
-lighting *= lerp(float3(1, 1, 1), float3(1.08, 0.68, 0.68), warmPaint * coolRamp * (1 - band));
+// Near-neutral paint must not amplify tiny channel differences into colored shadow stripes.
+float shadowWarmPaint = 1 - smoothstep(-0.12, 0.12, base.b - base.r);
+lighting *= lerp(float3(1, 1, 1), float3(1.08, 0.68, 0.68), shadowWarmPaint * coolRamp * (1 - band));
 // Authored bright paint seeds HDR bloom; the separate face pass adds no HDR boost.
 float3 glow = base * smoothstep(0.82, 0.94, min(base.r, min(base.g, base.b))) * band * 0.3;
 // A pale-color shoulder brightens painted whites without lifting saturated colors or shadows.
