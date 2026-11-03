@@ -17,7 +17,7 @@ if (ToonRampEnabled > 0.5)
 // Apply a warm highlight shoulder only to pale skin paint, retaining shadow and dark markings.
 float pale = smoothstep(0.45, 0.8, min(Base.r, min(Base.g, Base.b)));
 float3 highlight = (Base + (1 - Base) * float3(0.8, 0.7, 0.55)) * float3(1.0, 0.99, 0.965);
-Base = lerp(Base, highlight, pale * lit);
+Base = lerp(Base, highlight, pale * lit * 0.65);
 // The separate nose region uses a hard boundary; cheek/lip normals stay unused.
 float noseWidth = max(fwidth(Map.a) * 0.5, 0.0001);
 float nose = (1 - smoothstep(0.5 - noseWidth, 0.5 + noseWidth, Map.a)) * lit;
