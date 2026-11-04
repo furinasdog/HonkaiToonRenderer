@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 1,
-  "VersionName": "0.1.0",
+  "Version": 2,
+  "VersionName": "0.1.1",
   "FriendlyName": "Honkai Toon Renderer",
   "Description": "Reusable two-band character shading, authored ramps, face threshold maps and mesh outlines for Unreal Engine deferred rendering.",
   "Category": "Rendering",

@@ -194,3 +194,15 @@ and cause a clear refusal. Add `/Plugins/NVIDIA/` to the **host** `.gitignore` b
 installing. The script verifies the fixed archive hash and NVIDIA production DLL
 signatures, excludes vendor precompiled editor binaries and development DLLs, and
 records source provenance. It never places the SDK in this plugin's Git repository.
+
+### 0.1.1 shading refinement
+
+Pale lit face paint receives a less magenta highlight shoulder. Low-saturation
+surfaces retain more of the authored ramp hue instead of inheriting the warm
+shadow tint used for pink paint. Body ramp shadows have a modest contrast and
+chroma increase; the two-band boundary and authored sphere-map inputs remain.
+
+The host validation uses official March 7th screenshots and checks Sparkle and
+Phainon as additional models. These are local image comparisons, not a claim of
+matching the original game's lighting, geometry or shading exactly. No character
+assets or reference images are included.
