@@ -1,15 +1,36 @@
-# Contributing
+# 贡献指南
 
-Build with a licensed Unreal Engine 5.8 installation. Enable the plugin and its
-always-cook directory as described in README. An importer or capture service is
-not required. The optional NVIDIA SDK must remain outside this repository.
+感谢为独立 UE 卡通渲染插件提交修复、文档或集成示例。接入方式见 [README](README.md)，渲染约定见[实现说明](doc/ARCHITECTURE.md)。
 
-Run `Automation RunTests HonkaiToon` in an Editor host. For rendering changes,
-also cook a Development host and compare the same input, camera, light and
-exposure on an actual GPU; NullRHI checks cannot validate pixels. Keep a repeat-run
-control for temporal rendering noise. Report engine, GPU, driver and test scope.
+## 开发环境与边界
 
-Do not submit character models, model textures, game screenshots, camera footage,
-private mappings or derived maps without explicit redistribution rights. Prefer
-procedural fixtures and small focused regression checks. Preserve the original
-MIT, Epic and optional NVIDIA notices; do not relabel third-party content as MIT.
+使用符合 Epic 许可的 UE 5.8 C++ 宿主。基础插件不需要模型导入器、动捕插件或 NVIDIA SDK；Python 仅用于编辑器中的材质制作。可选 NVIDIA 文件应安装在宿主并保持在本仓库之外。
+
+修改前确认工作树状态，保留不属于本次修改的内容。改变公共 API 时同步调用示例、测试与错误说明；改变 HLSL/材质图时重新生成并验证提交的材质资产，不能只更新文本代码。
+
+## 验证
+
+1. 在不含本项目其他插件的独立宿主中构建，确认没有导入器、捕捉或 UI 的隐式依赖。
+2. 在 Editor 控制台运行 `Automation RunTests HonkaiToon`。该前缀包括渲染实例、Ramp 和可选放大适配器测试。检查报告中的失败/警告，不能仅依据进程退出码。
+3. 材质修改后运行 `Scripts/build_materials.py` 和 `Scripts/verify_materials.py`，确认八个资产仍使用正确通道和独立依赖。
+4. 对渲染变化进行真实 GPU 对照，固定输入、相机、光向、曝光、分辨率和 AA，并保存一次重复运行作为时域噪声对照。NullRHI 或源码测试不能证明画面正确。
+5. 若涉及资源、配置或兼容性，烘焙宿主并测试输出目录中的程序；如涉及 NVIDIA，分别检查缺少 SDK、不支持设备、启用/关闭与视口尺寸变化。明确未验证的平台与模式。
+
+优先使用程序化网格、合成纹理与小型回归测试。截图若含受限角色素材，保留在本地或提供有权公开的替代示例，不要纳入 Git 或发行包。
+
+## 问题报告与提交
+
+报告问题时提供：
+
+- UE 版本、插件版本/提交、平台、RHI；画面问题还应包含 GPU、驱动、输出尺寸和 AA 模式。
+- 最小复现步骤、相关日志、预期与实际行为。区分编辑器、打包程序、NullRHI 和真实 GPU。
+- 面部问题说明是否提供 FaceMap 及其线性/Clamp 设置；描边问题说明复制网格的姿态同步与材质槽数；打包缺材质时附烘焙设置。
+- 改动目的、范围和实际执行的验证；注明未验证部分，不把局部截图描述为全场景兼容保证。
+
+Pull Request 应聚焦一个明确问题。修改通用接口或基底约定时解释迁移方式；不引入按角色名、文件名或本机路径的补丁。新增依赖需说明必要性与许可，已有 UE/标准库能力能完成的工作不另加依赖。
+
+## 版权与许可
+
+原创贡献沿用 [MIT](LICENSE)，保留现有版权声明。第三方内容依各自许可，见[第三方声明](THIRD_PARTY_NOTICES.md)。不要将 Epic 派生资产或 NVIDIA SDK 标为 MIT。
+
+未经允许，不提交角色模型、角色贴图、游戏截图、参考立绘、摄像头录像、私人映射配置或派生控制图。能够在本机打开某个素材不等于获得再分发授权。
