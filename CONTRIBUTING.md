@@ -14,6 +14,7 @@
 2. 在 Editor 控制台运行 `Automation RunTests HonkaiToon`。该前缀包括渲染实例、Ramp 和可选放大适配器测试。检查报告中的失败/警告，不能仅依据进程退出码。
 3. 材质修改后运行 `Scripts/build_materials.py` 和 `Scripts/verify_materials.py`，确认八个资产仍使用正确通道和独立依赖。
 4. 对渲染变化进行真实 GPU 对照，固定输入、相机、光向、曝光、分辨率和 AA，并保存一次重复运行作为时域噪声对照。NullRHI 或源码测试不能证明画面正确。
+   面部/身体颜色回归可在独立 Python commandlet 中加 `-AllowCommandletRendering -ini:Engine:DevOptions.Shaders:bAllowAsynchronousShaderCompiling=False` 运行 `Scripts/verify_color_parity.py`；它用生产着色器颜色块检查同输入亮/暗档和鼻影，不替代完整模型对照。
 5. 若涉及资源、配置或兼容性，烘焙宿主并测试输出目录中的程序；如涉及 NVIDIA，分别检查缺少 SDK、不支持设备、启用/关闭与视口尺寸变化。明确未验证的平台与模式。
 
 优先使用程序化网格、合成纹理与小型回归测试。截图若含受限角色素材，保留在本地或提供有权公开的替代示例，不要纳入 Git 或发行包。

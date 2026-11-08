@@ -126,9 +126,11 @@ FHonkaiSurfaceInput Input;
 Input.BaseTexture = YourBaseTexture;
 Input.Tint = AuthoredDiffuseColor; // RGB 为线性颜色，A 为 [0,1] 透明度。
 Input.ToonRamp = YourOptionalRamp;
+Input.SpecularColor = FLinearColor(.15f, .18f, .22f); // 作者高光颜色；缺失时默认黑色关闭。
+Input.Shininess = 32.f;            // 作者高光指数，必须有限且非负。
 Input.bTwoSided = false;
 Input.bTranslucent = false;
-Input.OutlineWidth = 0.12f;        // UE 单位，需按网格比例调整。
+Input.OutlineWidth = 0.12f;        // 3 m 处的 UE 单位；透视距离补偿有上下界。
 Input.OutlineColor = FLinearColor::Black;
 Input.OutlineOpacity = 1.f;       // 默认是 0；希望描边可见时显式设置。
 ```

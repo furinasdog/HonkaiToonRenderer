@@ -45,10 +45,18 @@ for name in model_names:
     if name in ("M_Toon", "M_ToonTwoSided"):
         assert material.get_editor_property("shading_model") == u.MaterialShadingModel.MSM_DEFAULT_LIT, name
         nodes = list(walk(material, lib.get_material_property_input_node(material, u.MaterialProperty.MP_EMISSIVE_COLOR)))
-        assert any(isinstance(node, u.MaterialExpressionCustom) and node.get_editor_property("code") ==
-                   (library["SHADERS"] / "HonkaiFace.hlsl").read_text(encoding="utf-8") for node in nodes), name
+        face = next((node for node in nodes if isinstance(node, u.MaterialExpressionCustom) and
+                     node.get_editor_property("code") == library["shader_code"]("HonkaiFace.hlsl")), None)
+        assert face, name
+        assert {str(i.get_editor_property("input_name")) for i in face.get_editor_property("inputs")} == {
+            "Base", "Map", "Light", "ToonAtlas", "RampRow", "SpecularColor", "Shininess", "WorldNormal", "WorldLight", "ViewDirection"}, name
+        ramp_row = lib.get_material_property_input_node(material, u.MaterialProperty.MP_AMBIENT_OCCLUSION)
+        assert ramp_row in lib.get_inputs_for_material_expression(material, face), name
     if name in ("M_Outline", "M_FaceOutline"):
         assert material.get_editor_property("two_sided"), name
+        offset = lib.get_material_property_input_node(material, u.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+        assert isinstance(offset, u.MaterialExpressionCustom), name
+        assert offset.get_editor_property("code") == (library["SHADERS"] / "HonkaiOutline.hlsl").read_text(encoding="utf-8"), name
     u.log("HONKAI_TOON_GRAPH_OK " + name)
 
 cel = u.load_asset(root + "/M_CelLighting")
@@ -56,7 +64,7 @@ assert cel and cel.get_editor_property("material_domain") == u.MaterialDomain.MD
 assert cel.get_editor_property("blendable_location") == u.BlendableLocation.BL_SCENE_COLOR_BEFORE_DOF
 shader = lib.get_material_property_input_node(cel, u.MaterialProperty.MP_EMISSIVE_COLOR)
 assert isinstance(shader, u.MaterialExpressionCustom)
-assert shader.get_editor_property("code") == (library["SHADERS"] / "HonkaiToon.hlsl").read_text(encoding="utf-8")
+assert shader.get_editor_property("code") == library["shader_code"]("HonkaiToon.hlsl")
 white = u.load_asset(root + "/T_LinearWhite")
 assert white and not white.get_editor_property("srgb")
 options = u.AssetRegistryDependencyOptions(include_hard_package_references=True, include_soft_package_references=True,

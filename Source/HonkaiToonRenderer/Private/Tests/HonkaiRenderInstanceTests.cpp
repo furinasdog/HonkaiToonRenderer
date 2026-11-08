@@ -113,6 +113,8 @@ bool FHonkaiRenderLifecycleTest::RunTest(const FString&)
     Fixture.Renderer->SetLighting(FVector(1, 0, 0), FVector(0, 1, 0));
     Material->GetVectorParameterValue(TEXT("LightDirection"), Tint);
     TestTrue(TEXT("Face world-space light reaches the material"), Tint.Equals(FLinearColor(0, 1, 0, 1)));
+    Material->GetVectorParameterValue(TEXT("WorldLightDirection"), Tint);
+    TestTrue(TEXT("Specular keeps actual world light independent of head compensation"), Tint.Equals(FLinearColor(1, 0, 0, 1)));
 
     Maps.Reset();
     CollectGarbage(RF_NoFlags);
@@ -187,13 +189,15 @@ bool FHonkaiRenderAtomicTest::RunTest(const FString&)
     TestFalse(TEXT("Invalid preview slot is rejected"), Fixture.Renderer->SetTint(5, FLinearColor::White));
     TestFalse(TEXT("Nonfinite preview color is rejected"), Fixture.Renderer->SetTint(0,
         FLinearColor(std::numeric_limits<float>::quiet_NaN(), 1.f, 1.f, 1.f)));
-    for (int32 Case = 0; Case < 4; ++Case)
+    for (int32 Case = 0; Case < 6; ++Case)
     {
         auto Invalid = Fixture.Inputs;
         if (Case == 0) Invalid[0].BaseTexture = MakeMiplessTexture();
         if (Case == 1) Invalid[0].SphereTexture = NewObject<UTextureCube>();
         if (Case == 2) Invalid[0].ToonRamp = MakeMiplessTexture();
         if (Case == 3) Invalid[0].OutlineRegion = static_cast<EHonkaiOutlineRegion>(255);
+        if (Case == 4) Invalid[0].SpecularColor.R = std::numeric_limits<float>::quiet_NaN();
+        if (Case == 5) Invalid[0].Shininess = -1.f;
         TestFalse(TEXT("Malformed texture or outline input is rejected before rebind"), Fixture.Renderer->Bind(Fixture.Targets(), Invalid, Maps, {}, Error));
         TestTrue(TEXT("Failed texture/enum replacement retains bound material"), Fixture.Material() == Material);
         TestEqual(TEXT("Failed texture/enum replacement retains camera blendables"), Fixture.Camera->PostProcessSettings.WeightedBlendables.Array.Num(), Blendables);
@@ -258,6 +262,9 @@ bool FHonkaiRenderSurfaceTest::RunTest(const FString&)
     FString Error;
     if (!TestTrue(TEXT("All four surface variants bind"), Fixture.Renderer->Bind(Fixture.Targets(), Fixture.Inputs, {}, {}, Error)))
     { AddError(Error); return false; }
+    auto* Cel = Cast<UMaterialInstanceDynamic>(Fixture.Camera->PostProcessSettings.WeightedBlendables.Array.Last().Object);
+    UTexture* BodyAtlas = nullptr;
+    if (!TestTrue(TEXT("Body atlas is bound"), Cel && Cel->GetTextureParameterValue(TEXT("ToonAtlas"), BodyAtlas))) return false;
     for (int32 I = 0; I < 4; ++I)
     {
         auto* Material = Fixture.Material(I);
@@ -266,7 +273,30 @@ bool FHonkaiRenderSurfaceTest::RunTest(const FString&)
         TestEqual(TEXT("Authored transparency retained"), IsTranslucentBlendMode(Material->GetBlendMode()), I >= 2);
         float Row = 0; Material->GetScalarParameterValue(TEXT("RampRow"), Row);
         TestTrue(TEXT("Same source ramp shares one AO row; missing ramp keeps fallback"), FMath::IsNearlyEqual(Row, I < 2 ? 1.f / 255.f : 0.f));
+        if (I < 2)
+        {
+            UTexture* FaceAtlas = nullptr;
+            TestTrue(TEXT("Face and body share the exact atlas resource"),
+                Material->GetTextureParameterValue(TEXT("ToonAtlas"), FaceAtlas) && FaceAtlas == BodyAtlas);
+        }
     }
+    Fixture.Inputs[1].SpecularColor = FLinearColor(.2f, .4f, .8f);
+    Fixture.Inputs[1].Shininess = 48.f;
+    if (!TestTrue(TEXT("Shared ramp with distinct specular rebinds"), Fixture.Renderer->Bind(Fixture.Targets(), Fixture.Inputs, {}, {}, Error))) return false;
+    float FirstRow = 0, SecondRow = 0;
+    Fixture.Material(0)->GetScalarParameterValue(TEXT("RampRow"), FirstRow);
+    Fixture.Material(1)->GetScalarParameterValue(TEXT("RampRow"), SecondRow);
+    TestNotEqual(TEXT("Different highlight parameters never alias the lighting row"), FirstRow, SecondRow);
+    Cel = Cast<UMaterialInstanceDynamic>(Fixture.Camera->PostProcessSettings.WeightedBlendables.Array.Last().Object);
+    UTexture* SpecularTexture = nullptr;
+    if (!TestTrue(TEXT("Final pass receives the parameter atlas"), Cel->GetTextureParameterValue(TEXT("SpecularAtlas"), SpecularTexture))) return false;
+    auto* Specular2D = Cast<UTexture2D>(SpecularTexture);
+    if (!TestNotNull(TEXT("Specular atlas is a live 2D texture"), Specular2D)) return false;
+    auto& SpecularBulk = Specular2D->GetPlatformData()->Mips[0].BulkData;
+    const auto* SpecularPixels = static_cast<const FLinearColor*>(SpecularBulk.LockReadOnly());
+    if (!SpecularPixels) { SpecularBulk.Unlock(); AddError(TEXT("Specular atlas readback failed")); return false; }
+    TestEqual(TEXT("Authored color and exponent reach their own atlas row"), SpecularPixels[FMath::RoundToInt(SecondRow * 255.f)], FLinearColor(.2f, .4f, .8f, 48.f));
+    SpecularBulk.Unlock();
     Fixture.Renderer->Detach();
     FHonkaiRenderOptions BaseOnly; BaseOnly.bBaseColorOnly = true;
     TestTrue(TEXT("Base-color diagnostic binds"), Fixture.Renderer->Bind(Fixture.Targets(), Fixture.Inputs, {}, BaseOnly, Error));

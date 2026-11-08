@@ -2,7 +2,6 @@
 float visible = step(abs(Stencil.r - 1.0), 0.1) * step(abs(Depth.r - CustomDepth.r), 0.1);
 float3 base = Diffuse.rgb;
 float baseLuma = dot(base, float3(0.2126, 0.7152, 0.0722));
-float sourceSaturation = 1 - min(base.r, min(base.g, base.b)) / max(max(base.r, max(base.g, base.b)), 0.001);
 if (visible < 0.5) return Scene.rgb;
 float2 uv = GetDefaultSceneTextureUV(Parameters, 1);
 float row = (round(MaterialAO.r * 255.0) + 0.5) / 256.0;
@@ -27,34 +26,10 @@ if (baseLuma < 0.0001)
 // shortcut: this diffuse estimate assumes the viewer's neutral light and nonmetallic material.
 float3 linearScene = Scene.rgb * View.OneOverPreExposure;
 float illumination = dot(linearScene, float3(0.2126, 0.7152, 0.0722)) / baseLuma;
-float width = max(fwidth(illumination) * 0.5, 0.0001);
-float band = smoothstep(0.46 - width, 0.46 + width, illumination);
+float band = smoothstep(0.08, 0.95, illumination);
 // Material AO is reserved for the ramp index in the viewer's direct-light-only pipeline.
 float3 shadowColor = Texture2DSampleLevel(ToonAtlas, ToonAtlasSampler, float2(0.5 / 256.0, row), 0).rgb;
-float3 lightColor = Texture2DSampleLevel(ToonAtlas, ToonAtlasSampler, float2(255.5 / 256.0, row), 0).rgb;
-// Keep a distinct ink-like shade while retaining the hue of the authored ramp.
-float shadowLuma = dot(shadowColor, float3(0.2126, 0.7152, 0.0722));
-shadowColor = saturate(lerp(shadowLuma.xxx, shadowColor, 1.2)) * 0.88;
-float3 lighting = lerp(shadowColor, lightColor, band);
-float warmPaint = 1 - smoothstep(-0.005, 0.015, base.b - base.r);
-// Keep cool paint cool, while warm/pink paint gets a redder shadow instead of a blue-grey wash.
-float coolRamp = smoothstep(0.02, 0.08, shadowColor.b - shadowColor.r);
-// Near-neutral paint must not amplify tiny channel differences into colored shadow stripes.
-// Neutral cloth keeps its authored ramp hue; warm tint is reserved for saturated paint.
-float shadowWarmPaint = (1 - smoothstep(-0.12, 0.12, base.b - base.r))
-    * smoothstep(0.06, 0.16, sourceSaturation);
-lighting *= lerp(float3(1, 1, 1), float3(1.08, 0.68, 0.68), shadowWarmPaint * coolRamp * (1 - band));
-// Authored bright paint seeds HDR bloom; the separate face pass adds no HDR boost.
-float3 glow = base * smoothstep(0.82, 0.94, min(base.r, min(base.g, base.b))) * band * 0.3;
-// A pale-color shoulder brightens painted whites without lifting saturated colors or shadows.
-float pale = smoothstep(0.78, 0.85, max(base.r, max(base.g, base.b))) * (1 - smoothstep(0.08, 0.2, sourceSaturation));
-base = lerp(base, float3(1.0, 0.90, 0.865), pale * band * 0.8);
-float saturation = 1 - min(base.r, min(base.g, base.b)) / max(max(base.r, max(base.g, base.b)), 0.001);
-float warmMidtone = warmPaint * smoothstep(0.18, 0.4, saturation) * (1 - smoothstep(0.65, 0.85, saturation));
-base *= lerp(float3(1, 1, 1), float3(1.08, 1.0, 0.88), warmMidtone);
-base *= lerp(float3(1, 1, 1), float3(0.99, 0.99, 1.04), (1 - warmPaint) * band);
-float vivid = smoothstep(0.75, 0.95, saturation);
-base = lerp(base, dot(base, float3(0.2126, 0.7152, 0.0722)).xxx, vivid * 0.06);
+float3 rampColor = Texture2DSampleLevel(ToonAtlas, ToonAtlasSampler, float2((band * 255.0 + 0.5) / 256.0, row), 0).rgb;
 // A narrow depth edge follows the silhouette instead of brightening painted texture boundaries.
 float2 pixel = View.ViewSizeAndInvSize.zw * 1.5;
 float adjacentDepth = max(max(SceneTextureLookup(uv + float2(pixel.x, 0), 1, false).r,
@@ -63,4 +38,7 @@ float adjacentDepth = max(max(SceneTextureLookup(uv + float2(pixel.x, 0), 1, fal
                              SceneTextureLookup(uv - float2(0, pixel.y), 1, false).r));
 float rim = step(max(0.5, Depth.r * 0.003), adjacentDepth - Depth.r);
 rim *= saturate(dot(normalize(Normal.xyz), normalize(LightDirection)));
-return (base * (lighting + rim * 0.12) + glow) * View.PreExposure;
+HonkaiColor color;
+float4 specular = Texture2DSampleLevel(SpecularAtlas, SpecularAtlasSampler, float2(0.5, row), 0);
+float3 highlight = color.Highlight(base, specular.rgb, specular.a, normalize(Normal.xyz), normalize(LightDirection), normalize(ViewDirection), band);
+return (color.Shade(base, shadowColor, rampColor, band, rim) + highlight) * View.PreExposure;

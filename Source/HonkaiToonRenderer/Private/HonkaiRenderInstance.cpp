@@ -70,20 +70,53 @@ namespace
         return true;
     }
 
-    UTexture2D* BuildToonAtlas(const TArray<FHonkaiSurfaceInput>& Inputs, TMap<UTexture*, uint8>& Rows)
+    struct FLightingKey
+    {
+        UTexture2D* Ramp = nullptr;
+        FLinearColor Specular = FLinearColor::Black;
+        float Power = 32.f;
+        bool operator==(const FLightingKey& Other) const
+        { return Ramp == Other.Ramp && Specular == Other.Specular && Power == Other.Power; }
+        friend uint32 GetTypeHash(const FLightingKey& Key)
+        { return HashCombine(HashCombine(GetTypeHash(Key.Ramp), GetTypeHash(Key.Specular)), GetTypeHash(Key.Power)); }
+    };
+
+    UTexture2D* BuildToonAtlas(const TArray<FHonkaiSurfaceInput>& Inputs, TArray<uint8>& Rows, UTexture2D*& SpecularAtlas)
     {
         TArray<FColor> Pixels;
         Pixels.SetNumUninitialized(AtlasSize * AtlasSize);
         for (int32 Y = 0; Y < AtlasSize; ++Y)
             for (int32 X = 0; X < AtlasSize; ++X)
-                Pixels[Y * AtlasSize + X] = FMath::Lerp(FLinearColor(.64f, .52f, .61f), FLinearColor::White, X / 255.f).ToFColorSRGB();
+            {
+                const float T = X / 255.f;
+                const FLinearColor Mid(.84f, .76f, .80f);
+                Pixels[Y * AtlasSize + X] = (T < .5f
+                    ? FMath::Lerp(FLinearColor(.64f, .52f, .61f), Mid, T * 2.f)
+                    : FMath::Lerp(Mid, FLinearColor::White, T * 2.f - 1.f)).ToFColorSRGB();
+            }
+        TMap<FLightingKey, uint8> LightingRows;
+        LightingRows.Add(FLightingKey{}, 0);
+        TArray<FLinearColor> SpecularPixels;
+        SpecularPixels.Init(FLinearColor(0, 0, 0, 32), AtlasSize);
         for (const auto& Input : Inputs)
         {
-            UTexture2D* Texture = Input.ToonRamp;
-            if (!Texture || Rows.Contains(Texture) || Rows.Num() >= 255) continue;
-            const uint8 Row = uint8(Rows.Num() + 1);
-            if (CopyToonRamp(Texture, Pixels, Row)) Rows.Add(Texture, Row);
+            const FLightingKey Key{Input.ToonRamp, FLinearColor(Input.SpecularColor.R, Input.SpecularColor.G, Input.SpecularColor.B), Input.Shininess};
+            if (const uint8* Existing = LightingRows.Find(Key)) { Rows.Add(*Existing); continue; }
+            if (LightingRows.Num() >= AtlasSize) return nullptr;
+            const uint8 Row = uint8(LightingRows.Num());
+            LightingRows.Add(Key, Row); Rows.Add(Row);
+            CopyToonRamp(Input.ToonRamp, Pixels, Row);
+            SpecularPixels[Row] = FLinearColor(Key.Specular.R, Key.Specular.G, Key.Specular.B, Key.Power);
         }
+        SpecularAtlas = UTexture2D::CreateTransient(1, AtlasSize, PF_A32B32G32R32F);
+        if (!SpecularAtlas) return nullptr;
+        SpecularAtlas->SRGB = false; SpecularAtlas->Filter = TF_Nearest;
+        SpecularAtlas->AddressX = SpecularAtlas->AddressY = TA_Clamp;
+        auto& SpecularBulk = SpecularAtlas->GetPlatformData()->Mips[0].BulkData;
+        void* SpecularDestination = SpecularBulk.Lock(LOCK_READ_WRITE);
+        if (!SpecularDestination) { SpecularBulk.Unlock(); return nullptr; }
+        FMemory::Memcpy(SpecularDestination, SpecularPixels.GetData(), SpecularPixels.Num() * sizeof(FLinearColor));
+        SpecularBulk.Unlock();
         auto* Atlas = UTexture2D::CreateTransient(AtlasSize, AtlasSize, PF_B8G8R8A8);
         if (!Atlas) return nullptr;
         Atlas->SRGB = true;
@@ -198,7 +231,9 @@ bool UHonkaiRenderInstance::Prepare(const FHonkaiRenderTargets& Targets, const T
     }
     for (const auto& Input : Surfaces)
     {
-        if (!IsFiniteColor(Input.Tint) || !IsFiniteColor(Input.OutlineColor) || !FMath::IsFinite(Input.ToonStrength)
+        if (!IsFiniteColor(Input.Tint) || !IsFiniteColor(Input.OutlineColor) || !IsFiniteColor(Input.SpecularColor)
+            || Input.SpecularColor.R < 0.f || Input.SpecularColor.G < 0.f || Input.SpecularColor.B < 0.f
+            || !FMath::IsFinite(Input.Shininess) || Input.Shininess < 0.f || !FMath::IsFinite(Input.ToonStrength)
             || !FMath::IsFinite(Input.SphereMode) || !FMath::IsFinite(Input.OutlineWidth) || Input.OutlineWidth < 0.f
             || !FMath::IsFinite(Input.OutlineOpacity) || Input.OutlineOpacity < 0.f || Input.OutlineOpacity > 1.f
             || Input.Tint.A < 0.f || Input.Tint.A > 1.f
@@ -217,11 +252,13 @@ bool UHonkaiRenderInstance::Prepare(const FHonkaiRenderTargets& Targets, const T
         if (!Parent) { Error = TEXT("Missing cooked renderer asset: ") + Path; return false; }
         Parents.Add(Parent);
     }
-    TMap<UTexture*, uint8> RampRows;
-    ToonAtlas = BuildToonAtlas(Inputs, RampRows);
-    if (!ToonAtlas) { Error = TEXT("Unable to allocate the authored toon-ramp atlas."); return false; }
+    TArray<uint8> RampRows;
+    UTexture2D* NewSpecularAtlas = nullptr;
+    ToonAtlas = BuildToonAtlas(Inputs, RampRows, NewSpecularAtlas);
+    SpecularAtlas = NewSpecularAtlas;
+    if (!ToonAtlas) { Error = TEXT("Unable to allocate lighting atlases, or more than 255 non-default ramp/specular combinations."); return false; }
     // Copy CPU ramps before upload; every resource must exist before DMI uniform caching can sample it.
-    if (!PrepareTexture(ToonAtlas, Error)) return false;
+    if (!PrepareTexture(ToonAtlas, Error) || !PrepareTexture(SpecularAtlas, Error)) return false;
     for (const auto& Input : Inputs)
         for (UTexture* Texture : { Input.BaseTexture.Get(), static_cast<UTexture*>(Input.ToonRamp.Get()), Input.SphereTexture.Get() })
             if (!PrepareTexture(Texture, Error)) return false;
@@ -231,6 +268,7 @@ bool UHonkaiRenderInstance::Prepare(const FHonkaiRenderTargets& Targets, const T
         CelPass = UMaterialInstanceDynamic::Create(Parents[EParent::Cel], ResourceOwner);
         if (!CelPass) { Error = TEXT("Unable to create the toon postprocess material."); return false; }
         CelPass->SetTextureParameterValue(TEXT("ToonAtlas"), ToonAtlas);
+        CelPass->SetTextureParameterValue(TEXT("SpecularAtlas"), SpecularAtlas);
         CelPass->SetVectorParameterValue(TEXT("LightDirection"), FLinearColor(FVector::ForwardVector));
     }
     for (int32 I = 0; I < Inputs.Num(); ++I)
@@ -246,13 +284,12 @@ bool UHonkaiRenderInstance::Prepare(const FHonkaiRenderTargets& Targets, const T
         Material->SetVectorParameterValue(TEXT("Tint"), Input.Tint);
         Material->SetScalarParameterValue(TEXT("Opacity"), Input.Tint.A);
         Material->SetVectorParameterValue(TEXT("LightDirection"), FLinearColor(FVector::ForwardVector));
+        Material->SetVectorParameterValue(TEXT("WorldLightDirection"), FLinearColor(FVector::ForwardVector));
+        Material->SetTextureParameterValue(TEXT("ToonAtlas"), ToonAtlas);
+        Material->SetVectorParameterValue(TEXT("SpecularColor"), Input.SpecularColor);
+        Material->SetScalarParameterValue(TEXT("Shininess"), Input.Shininess);
         if (Input.BaseTexture) Material->SetTextureParameterValue(TEXT("BaseTexture"), Input.BaseTexture);
-        if (const uint8* Row = RampRows.Find(Input.ToonRamp))
-        {
-            Material->SetScalarParameterValue(TEXT("RampRow"), *Row / 255.f);
-            Material->SetTextureParameterValue(TEXT("ToonRamp"), Input.ToonRamp);
-            Material->SetScalarParameterValue(TEXT("ToonRampEnabled"), 1.f);
-        }
+        Material->SetScalarParameterValue(TEXT("RampRow"), RampRows[I] / 255.f);
         if (Input.SphereTexture)
         {
             Material->SetTextureParameterValue(TEXT("SphereTexture"), Input.SphereTexture);
@@ -286,6 +323,7 @@ bool UHonkaiRenderInstance::Bind(const FHonkaiRenderTargets& Targets, const TArr
     Materials = MoveTemp(Prepared->Materials); BaseOutlines = MoveTemp(Prepared->BaseOutlines);
     FaceOutlines = MoveTemp(Prepared->FaceOutlines); OutlineFaceMaps = MoveTemp(Prepared->OutlineFaceMaps);
     ActiveFaceMaps = MoveTemp(Prepared->ActiveFaceMaps); ToonAtlas = Prepared->ToonAtlas; CelPass = Prepared->CelPass;
+    SpecularAtlas = Prepared->SpecularAtlas;
     Options = InOptions;
     SavedSurfaceMaterials = Surface->OverrideMaterials;
     bOriginalCustomDepth = Surface->bRenderCustomDepth; OriginalStencil = Surface->CustomDepthStencilValue;
@@ -353,7 +391,11 @@ void UHonkaiRenderInstance::SetLighting(FVector WorldDirection, FVector FaceWorl
     if (!IsInGameThread() || WorldDirection.ContainsNaN() || FaceWorldDirection.ContainsNaN()
         || WorldDirection.IsNearlyZero() || FaceWorldDirection.IsNearlyZero()) return;
     if (CelPass) CelPass->SetVectorParameterValue(TEXT("LightDirection"), FLinearColor(WorldDirection));
-    for (const auto& Material : Materials) if (Material) Material->SetVectorParameterValue(TEXT("LightDirection"), FLinearColor(FaceWorldDirection));
+    for (const auto& Material : Materials) if (Material)
+    {
+        Material->SetVectorParameterValue(TEXT("LightDirection"), FLinearColor(FaceWorldDirection));
+        Material->SetVectorParameterValue(TEXT("WorldLightDirection"), FLinearColor(WorldDirection));
+    }
 }
 
 bool UHonkaiRenderInstance::SetTint(int32 Slot, FLinearColor Tint)
@@ -385,7 +427,7 @@ void UHonkaiRenderInstance::Detach()
     Surface.Reset(); Outline.Reset(); Camera.Reset();
     Inputs.Reset(); Parents.Reset(); SavedSurfaceMaterials.Reset(); SavedOutlineMaterials.Reset();
     Materials.Reset(); BaseOutlines.Reset(); FaceOutlines.Reset(); OutlineFaceMaps.Reset(); ActiveFaceMaps.Reset();
-    ToonAtlas = nullptr; CelPass = nullptr;
+    ToonAtlas = nullptr; SpecularAtlas = nullptr; CelPass = nullptr;
 }
 
 void UHonkaiRenderInstance::BeginDestroy()

@@ -19,6 +19,10 @@ lib = u.MaterialEditingLibrary
 linear_white = None
 
 
+def shader_code(name):
+    return (SHADERS / "HonkaiColor.hlsl").read_text(encoding="utf-8") + "\n" + (SHADERS / name).read_text(encoding="utf-8")
+
+
 def initialize_assets():
     global linear_white
     path = ROOT + "/T_LinearWhite"
@@ -101,9 +105,18 @@ def material(name, translucent=False, outline=False, two_sided=False, face_outli
         scaled_width = node(u.MaterialExpressionMultiply)
         connect(width, "", scaled_width, "A")
         connect(nose_width, "", scaled_width, "B")
-        offset = node(u.MaterialExpressionMultiply)
-        connect(normal, "", offset, "A")
-        connect(scaled_width if face_outline else width, "", offset, "B")
+        offset = node(u.MaterialExpressionCustom, output_type=u.CustomMaterialOutputType.CMOT_FLOAT3,
+                      code=(SHADERS / "HonkaiOutline.hlsl").read_text(encoding="utf-8"))
+        offset_inputs = []
+        for name in ("Normal", "Width", "Position", "Camera"):
+            entry = u.CustomInput()
+            entry.set_editor_property("input_name", name)
+            offset_inputs.append(entry)
+        offset.set_editor_property("inputs", offset_inputs)
+        connect(normal, "", offset, "Normal")
+        connect(scaled_width if face_outline else width, "", offset, "Width")
+        connect(node(u.MaterialExpressionWorldPosition), "", offset, "Position")
+        connect(node(u.MaterialExpressionCameraPositionWS), "", offset, "Camera")
         output(offset, "", u.MaterialProperty.MP_WORLD_POSITION_OFFSET)
         facing = node(u.MaterialExpressionTwoSidedSign)
         mask = node(u.MaterialExpressionCustom, output_type=u.CustomMaterialOutputType.CMOT_FLOAT1, code="return A * step(S, 0.0);")
@@ -148,10 +161,10 @@ def material(name, translucent=False, outline=False, two_sided=False, face_outli
         base = composite
         if lit:
             # AO is disabled in this viewer; its GBuffer byte carries the material's ramp row.
-            output(node(u.MaterialExpressionScalarParameter, parameter_name="RampRow", default_value=0), "", u.MaterialProperty.MP_AMBIENT_OCCLUSION)
-            toon_ramp = node(u.MaterialExpressionTextureObjectParameter, parameter_name="ToonRamp",
+            ramp_row = node(u.MaterialExpressionScalarParameter, parameter_name="RampRow", default_value=0)
+            output(ramp_row, "", u.MaterialProperty.MP_AMBIENT_OCCLUSION)
+            toon_atlas = node(u.MaterialExpressionTextureObjectParameter, parameter_name="ToonAtlas",
                              texture=u.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
-            toon_ramp_enabled = node(u.MaterialExpressionScalarParameter, parameter_name="ToonRampEnabled", default_value=0)
             face_enabled = node(u.MaterialExpressionScalarParameter, parameter_name="FaceEnabled", default_value=0)
             face_map = node(u.MaterialExpressionTextureSampleParameter2D, parameter_name="FaceMap",
                             texture=linear_white,
@@ -163,9 +176,9 @@ def material(name, translucent=False, outline=False, two_sided=False, face_outli
                                transform_type=u.MaterialVectorCoordTransform.TRANSFORM_LOCAL)
             connect(light, "RGB", local_light, "")
             face = node(u.MaterialExpressionCustom, output_type=u.CustomMaterialOutputType.CMOT_FLOAT3,
-                        code=(SHADERS / "HonkaiFace.hlsl").read_text(encoding="utf-8"))
+                        code=shader_code("HonkaiFace.hlsl"))
             face_inputs = []
-            for input_name in ("Base", "Map", "Light", "ToonRamp", "ToonRampEnabled"):
+            for input_name in ("Base", "Map", "Light", "ToonAtlas", "RampRow", "SpecularColor", "Shininess", "WorldNormal", "WorldLight", "ViewDirection"):
                 i = u.CustomInput()
                 i.set_editor_property("input_name", input_name)
                 face_inputs.append(i)
@@ -173,8 +186,14 @@ def material(name, translucent=False, outline=False, two_sided=False, face_outli
             connect(base, "", face, "Base")
             connect(face_map, "RGBA", face, "Map")
             connect(local_light, "", face, "Light")
-            connect(toon_ramp, "", face, "ToonRamp")
-            connect(toon_ramp_enabled, "", face, "ToonRampEnabled")
+            connect(toon_atlas, "", face, "ToonAtlas")
+            connect(ramp_row, "", face, "RampRow")
+            connect(node(u.MaterialExpressionVectorParameter, parameter_name="SpecularColor", default_value=u.LinearColor(0, 0, 0, 1)), "RGB", face, "SpecularColor")
+            connect(node(u.MaterialExpressionScalarParameter, parameter_name="Shininess", default_value=32), "", face, "Shininess")
+            connect(node(u.MaterialExpressionPixelNormalWS), "", face, "WorldNormal")
+            world_light = node(u.MaterialExpressionVectorParameter, parameter_name="WorldLightDirection", default_value=u.LinearColor(1, 0, 0, 0))
+            connect(world_light, "RGB", face, "WorldLight")
+            connect(node(u.MaterialExpressionCameraVectorWS), "", face, "ViewDirection")
             body_enabled = node(u.MaterialExpressionOneMinus)
             connect(face_enabled, "", body_enabled, "")
             body_strength = node(u.MaterialExpressionMultiply)
@@ -215,7 +234,7 @@ def cel_lighting():
     m.set_editor_property("blendable_location", u.BlendableLocation.BL_SCENE_COLOR_BEFORE_DOF)
     shader = lib.create_material_expression(m, u.MaterialExpressionCustom)
     shader.set_editor_property("output_type", u.CustomMaterialOutputType.CMOT_FLOAT3)
-    shader.set_editor_property("code", (SHADERS / "HonkaiToon.hlsl").read_text(encoding="utf-8"))
+    shader.set_editor_property("code", shader_code("HonkaiToon.hlsl"))
     textures = {"Scene": u.SceneTextureId.PPI_POST_PROCESS_INPUT0,
                 "Diffuse": u.SceneTextureId.PPI_DIFFUSE_COLOR,
                 "Normal": u.SceneTextureId.PPI_WORLD_NORMAL,
@@ -228,7 +247,7 @@ def cel_lighting():
         i = u.CustomInput()
         i.set_editor_property("input_name", name)
         inputs.append(i)
-    for name in ("LightDirection", "ToonAtlas"):
+    for name in ("LightDirection", "ToonAtlas", "SpecularAtlas", "ViewDirection"):
         i = u.CustomInput()
         i.set_editor_property("input_name", name)
         inputs.append(i)
@@ -245,6 +264,12 @@ def cel_lighting():
     atlas.set_editor_property("parameter_name", "ToonAtlas")
     atlas.set_editor_property("texture", u.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
     connect(atlas, "", shader, "ToonAtlas")
+    specular = lib.create_material_expression(m, u.MaterialExpressionTextureObjectParameter)
+    specular.set_editor_property("parameter_name", "SpecularAtlas")
+    specular.set_editor_property("texture", linear_white)
+    specular.set_editor_property("sampler_type", u.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+    connect(specular, "", shader, "SpecularAtlas")
+    connect(lib.create_material_expression(m, u.MaterialExpressionCameraVectorWS), "", shader, "ViewDirection")
     output(shader, "", u.MaterialProperty.MP_EMISSIVE_COLOR)
     lib.layout_material_expressions(m)
     assert not lib.recompile_material(m)
@@ -266,6 +291,7 @@ def model_materials():
 
 
 def main():
+    u.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([ROOT], True)
     model_materials()
     cel_lighting()
     import runpy

@@ -26,6 +26,8 @@ struct HONKAITOONRENDERER_API FHonkaiSurfaceInput
     UPROPERTY() TObjectPtr<UTexture> SphereTexture;
     FLinearColor Tint = FLinearColor::White;
     FLinearColor OutlineColor = FLinearColor::Black;
+    FLinearColor SpecularColor = FLinearColor::Black;
+    float Shininess = 32.f;
     float ToonStrength = 1.f;
     float SphereMode = 0.f;
     float OutlineWidth = 0.f; // UE units; the face variant uses 75% of this width.
@@ -98,5 +100,6 @@ private:
     UPROPERTY() TArray<TObjectPtr<UTexture2D>> OutlineFaceMaps;
     UPROPERTY() TMap<int32, TObjectPtr<UTexture2D>> ActiveFaceMaps;
     UPROPERTY() TObjectPtr<UTexture2D> ToonAtlas;
+    UPROPERTY() TObjectPtr<UTexture2D> SpecularAtlas;
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> CelPass;
 };
