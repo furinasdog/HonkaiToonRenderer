@@ -29,7 +29,7 @@ float row = (round(RampRow * 255.0) + 0.5) / 256.0;
     targets, instances = [], []
     atlas_code = "if (UV.x > .35 && UV.x < .65) return float3(.15,.8,.25); return UV.y < 1.0 / 256.0 ? (UV.x < .5 ? float3(.4,.5,.7) : float3(.9,.8,.7)) : (UV.x < .5 ? float3(.7,.3,.2) : float3(.5,.8,1));"
     face_color_code = face_code.replace("float lit = smoothstep(angle - width, angle + width, threshold);", "float lit = Band;")
-    for label, code in (("Body", body_code), ("Face", face_code), ("Atlas", atlas_code), ("FaceColor", face_color_code)):
+    for label, code in (("Body", body_code), ("Face", face_code), ("Atlas", atlas_code), ("FaceColor", face_color_code), ("Region", (shader_dir / "HonkaiFaceRegion.hlsl").read_text(encoding="utf-8"))):
         material = u.AssetToolsHelpers.get_asset_tools().create_asset("M_" + label, "/Game/__HonkaiColorParityTest", u.Material, u.MaterialFactoryNew())
         assert material
         material.set_editor_property("shading_model", u.MaterialShadingModel.MSM_UNLIT)
@@ -37,6 +37,9 @@ float row = (round(RampRow * 255.0) + 0.5) / 256.0;
         custom.set_editor_property("output_type", u.CustomMaterialOutputType.CMOT_FLOAT3)
         custom.set_editor_property("code", code)
         parameters = {
+            "RestNormal": (u.MaterialExpressionVectorParameter, u.LinearColor(0, 1, 0, 0)),
+            "NoseMask": (u.MaterialExpressionScalarParameter, 1.),
+            "Enabled": (u.MaterialExpressionScalarParameter, 1.),
             "Base": (u.MaterialExpressionVectorParameter, u.LinearColor(.7, .6, .55, 1)),
             "Map": (u.MaterialExpressionVectorParameter, u.LinearColor(1, 1, 1, 1)),
             "Light": (u.MaterialExpressionVectorParameter, u.LinearColor(1, 0, 0, 0)),
@@ -80,6 +83,18 @@ float row = (round(RampRow * 255.0) + 0.5) / 256.0;
         u.RenderingLibrary.draw_material_to_render_target(world, targets[index], instance)
         color = u.RenderingLibrary.read_render_target_raw_pixel(world, targets[index], 8, 8, False)
         return [color.r, color.g, color.b]
+
+    for normal, nose_mask, enabled, expected in (
+            ((0, 1, 0), 1, 1, 1), ((0, .8, -.6), 1, 1, 1),
+            ((0, -.8, -.6), 1, 1, 0), ((0, -.8, -.6), 0, 1, 1),
+            ((0, 1, 0), 1, 0, 0), ((0, -1, 0), 1, 1, 1)):
+        instances[4].set_vector_parameter_value("RestNormal", u.LinearColor(*normal, 0))
+        instances[4].set_scalar_parameter_value("NoseMask", nose_mask)
+        instances[4].set_scalar_parameter_value("Enabled", enabled)
+        u.RenderingLibrary.draw_material_to_render_target(world, targets[4], instances[4])
+        value = u.RenderingLibrary.read_render_target_raw_pixel(world, targets[4], 8, 8, False).r
+        assert abs(value - expected) < .001, (normal, nose_mask, enabled, value, expected)
+    u.log("HONKAI_FACE_REGION_RESULT jaw=lit frontal_downward=SDF nose=preserved disabled=lit")
 
     worst = 0.
     rendered = []

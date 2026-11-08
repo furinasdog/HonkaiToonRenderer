@@ -48,6 +48,14 @@ for name in model_names:
         face = next((node for node in nodes if isinstance(node, u.MaterialExpressionCustom) and
                      node.get_editor_property("code") == library["shader_code"]("HonkaiFace.hlsl")), None)
         assert face, name
+        region = next((entry for entry in nodes if isinstance(entry, u.MaterialExpressionCustom) and
+                       entry.get_editor_property("code") == (library["SHADERS"] / "HonkaiFaceRegion.hlsl").read_text(encoding="utf-8")), None)
+        assert region and region in set(walk(material, lib.get_material_property_input_node(material, u.MaterialProperty.MP_BASE_COLOR))), name
+        # Both lighting paths must use one selector; fractional diffuse/emissive mixing corrupts Scene/Diffuse.
+        region_nodes = list(walk(material, region))
+        assert any(isinstance(entry, u.MaterialExpressionPreSkinnedNormal) for entry in region_nodes), name
+        assert any(isinstance(entry, u.MaterialExpressionVertexInterpolator) for entry in region_nodes), name
+
         assert {str(i.get_editor_property("input_name")) for i in face.get_editor_property("inputs")} == {
             "Base", "Map", "Light", "ToonAtlas", "RampRow", "SpecularColor", "Shininess", "WorldNormal", "WorldLight", "ViewDirection"}, name
         ramp_row = lib.get_material_property_input_node(material, u.MaterialProperty.MP_AMBIENT_OCCLUSION)
